@@ -1,0 +1,27 @@
+---
+title: "Spatial Optimization"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+(Hawaii climate data portal, geoportal.hawaii.gov, opendata hawaii(?) <https://opendata.hawaii.gov/dataset/watersheds>
+
+Elevation: I want to make the image clearer, find the best place to farm based on elevation.
+
+-Find a satellite image
+
+```{r}
+library(terra)
+
+dem1 <- rast("USGS_13_n22w158_20250611.tif")
+dem2 <- rast("USGS_13_n22w159_20250611.tif")
+```
+
+```{r}
+dem <- mosaic(dem1, dem2)
+plot(dem, main="Oahu Elevation (meters)")
+```
