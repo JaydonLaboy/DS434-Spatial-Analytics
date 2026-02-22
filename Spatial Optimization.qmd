@@ -4,9 +4,43 @@ format: html
 editor: visual
 ---
 
-## Quarto
+## Spatial Optimization Project
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+Description: Main Question: Where are the most optimal locations on Oahu to make new farms based on environmental suitability, market access, and regulatory constraints?
+
+1.  Soil Quality
+
+    1.  Soil type (map it out)
+
+    2.  Find best soil for agriculture (Show on map)
+
+<!-- -->
+
+2.  Water Availability
+
+    1.  Rainfall data/Annual precipitation
+
+    2.  Distance to streams/springs
+
+<!-- -->
+
+3.  Slope and Elvelation
+
+    1.  Farms prefer gentle slopes
+
+    2.  Too steep means erosion risk and equipment limitations.
+
+<!-- -->
+
+4.  Ignition risk
+
+    1.  Historical wildfire ignition points
+
+    2.  Drought-prone areas
+
+    3.  Areas with lower ignition risk will be ranked higher in suitability for long-term farm development.
+
+This project will look at the optimal locations to build new farms on Oahu. The goal is to find areas that are environmentally suitable, close to markets, and practical for farming operations. I will create a soil quality map showing different soil types across the island and highlight the soils that are best for agriculture. Areas with better soil will rank higher in suitability. Next, I will create a water availability map using annual rainfall data and distance to streams or springs. Farms need reliable water, so areas with more rainfall or closer water sources will score higher. Then, I will map slope and elevation to show which areas are flat or gently sloped. Since steep land increases erosion risk and makes equipment use difficult, flatter areas will be considered more suitable. I will also create an ignition risk map that will identify areas more susceptible to wildfire. Lower ranked areas will be ranked as more suitable for long term agriculture use. Finally, I will combine all of these mapped layers into one spatial suitability map using a weighted overlay model. This final map will show the most optimal locations for new farms on the island based on environmental conditions.
 
 (Hawaii climate data portal, geoportal.hawaii.gov, opendata hawaii(?) <https://opendata.hawaii.gov/dataset/watersheds>
 
@@ -25,3 +59,76 @@ dem2 <- rast("USGS_13_n22w159_20250611.tif")
 dem <- mosaic(dem1, dem2)
 plot(dem, main="Oahu Elevation (meters)")
 ```
+
+Satellite map (Not working whatsoever)
+
+```{r}
+install.packages(c("terra", "ggplot2", "tidyterra", "basemaps"))
+
+library(terra)
+library(ggplot2)
+library(tidyterra)
+library(basemaps)
+```
+
+```{r}
+getwd()
+list.files()
+```
+
+```{r}
+dem1 <- rast("USGS_13_n22w158_20250611.tif")
+dem2 <- rast("USGS_13_n22w159_20250611.tif")
+
+dem <- mosaic(dem1, dem2)
+```
+
+```{r}
+plot(dem)
+```
+
+```{r}
+bbox <- ext(dem_wgs)
+
+sat <- basemap_terra(
+  bbox = bbox,
+  map_service = "esri",
+  map_type = "satellite"
+)
+```
+
+```{r}
+library(terra)
+library(basemaps)
+
+# Load DEM tiles
+dem1 <- rast("USGS_13_n22w158_20250611.tif")
+dem2 <- rast("USGS_13_n22w159_20250611.tif")
+
+# Assign CRS explicitly if missing
+crs(dem1) <- "EPSG:4269"
+crs(dem2) <- "EPSG:4269"
+
+# Mosaic DEMs
+dem <- mosaic(dem1, dem2)
+
+# Project to WGS84
+dem_wgs <- project(dem, "EPSG:4326")
+
+# ⚡ Force single EPSG code (remove ensemble)
+crs(dem_wgs) <- "EPSG:4326"
+
+# Prepare bounding box in correct order: xmin, ymin, xmax, ymax
+bbox_vec <- c(xmin(dem_wgs), ymin(dem_wgs), xmax(dem_wgs), ymax(dem_wgs))
+
+# Fetch ESRI satellite basemap
+sat <- basemap(
+  ext = bbox_vec,
+  map_service = "esri",
+  map_type    = "satellite"
+)
+```
+
+Rainfall: <https://www.hawaii.edu/climate-data-portal/data-portal/>
+
+Soil quality
