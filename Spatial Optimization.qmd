@@ -6,7 +6,7 @@ editor: visual
 
 ## Spatial Optimization Project
 
-Description: Main Question: Where are the most optimal locations on Oahu to make new farms based on environmental suitability, market access, and regulatory constraints?
+Description: Main Question: Where are the most optimal locations on Oahu to make new farms based on environmental suitability, market access, and regulatory constraints? (Rainfall and ignition probability, just waiting on email with package)
 
 1.  Soil Quality
 
@@ -60,73 +60,32 @@ dem <- mosaic(dem1, dem2)
 plot(dem, main="Oahu Elevation (meters)")
 ```
 
-Satellite map (Not working whatsoever)
-
-```{r}
-install.packages(c("terra", "ggplot2", "tidyterra", "basemaps"))
-
-library(terra)
-library(ggplot2)
-library(tidyterra)
-library(basemaps)
-```
-
-```{r}
-getwd()
-list.files()
-```
-
-```{r}
-dem1 <- rast("USGS_13_n22w158_20250611.tif")
-dem2 <- rast("USGS_13_n22w159_20250611.tif")
-
-dem <- mosaic(dem1, dem2)
-```
-
-```{r}
-plot(dem)
-```
-
-```{r}
-bbox <- ext(dem_wgs)
-
-sat <- basemap_terra(
-  bbox = bbox,
-  map_service = "esri",
-  map_type = "satellite"
-)
-```
+Satellite map (Elevation is now working, Just need something for slope)
 
 ```{r}
 library(terra)
-library(basemaps)
+library(leaflet)
 
-# Load DEM tiles
-dem1 <- rast("USGS_13_n22w158_20250611.tif")
-dem2 <- rast("USGS_13_n22w159_20250611.tif")
-
-# Assign CRS explicitly if missing
-crs(dem1) <- "EPSG:4269"
-crs(dem2) <- "EPSG:4269"
-
-# Mosaic DEMs
 dem <- mosaic(dem1, dem2)
+dem_wgs84 <- project(dem, "EPSG:4326")
 
-# Project to WGS84
-dem_wgs <- project(dem, "EPSG:4326")
+# Aggregate to reduce size (factor = 4 means 1/4 resolution)
+dem_agg <- aggregate(dem_wgs84, fact = 4, fun = "mean")
 
-# ⚡ Force single EPSG code (remove ensemble)
-crs(dem_wgs) <- "EPSG:4326"
+# Check size — keep reducing 'fact' until it works
+# fact=4 reduces ~16x, fact=6 reduces ~36x
 
-# Prepare bounding box in correct order: xmin, ymin, xmax, ymax
-bbox_vec <- c(xmin(dem_wgs), ymin(dem_wgs), xmax(dem_wgs), ymax(dem_wgs))
-
-# Fetch ESRI satellite basemap
-sat <- basemap(
-  ext = bbox_vec,
-  map_service = "esri",
-  map_type    = "satellite"
+pal <- colorNumeric(
+  palette = c("#300060", "#00AACC", "#FFFF00"),
+  values(dem_agg),
+  na.color = "transparent"
 )
+
+leaflet() %>%
+  addProviderTiles(providers$Esri.WorldImagery) %>%
+  addRasterImage(dem_agg, colors = pal, opacity = 0.6) %>%
+  addLegend(pal = pal, values = values(dem_agg),
+            title = "Elevation (m)", position = "bottomright")
 ```
 
 Rainfall: <https://www.hawaii.edu/climate-data-portal/data-portal/>
