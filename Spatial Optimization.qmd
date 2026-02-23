@@ -1,0 +1,93 @@
+---
+title: "Spatial Optimization"
+format: html
+editor: visual
+---
+
+## Spatial Optimization Project
+
+Description: Main Question: Where are the most optimal locations on Oahu to make new farms based on environmental suitability, market access, and regulatory constraints? (Rainfall and ignition probability, just waiting on email with package)
+
+1.  Soil Quality
+
+    1.  Soil type (map it out)
+
+    2.  Find best soil for agriculture (Show on map)
+
+<!-- -->
+
+2.  Water Availability
+
+    1.  Rainfall data/Annual precipitation
+
+    2.  Distance to streams/springs
+
+<!-- -->
+
+3.  Slope and Elvelation
+
+    1.  Farms prefer gentle slopes
+
+    2.  Too steep means erosion risk and equipment limitations.
+
+<!-- -->
+
+4.  Ignition risk
+
+    1.  Historical wildfire ignition points
+
+    2.  Drought-prone areas
+
+    3.  Areas with lower ignition risk will be ranked higher in suitability for long-term farm development.
+
+This project will look at the optimal locations to build new farms on Oahu. The goal is to find areas that are environmentally suitable, close to markets, and practical for farming operations. I will create a soil quality map showing different soil types across the island and highlight the soils that are best for agriculture. Areas with better soil will rank higher in suitability. Next, I will create a water availability map using annual rainfall data and distance to streams or springs. Farms need reliable water, so areas with more rainfall or closer water sources will score higher. Then, I will map slope and elevation to show which areas are flat or gently sloped. Since steep land increases erosion risk and makes equipment use difficult, flatter areas will be considered more suitable. I will also create an ignition risk map that will identify areas more susceptible to wildfire. Lower ranked areas will be ranked as more suitable for long term agriculture use. Finally, I will combine all of these mapped layers into one spatial suitability map using a weighted overlay model. This final map will show the most optimal locations for new farms on the island based on environmental conditions.
+
+(Hawaii climate data portal, geoportal.hawaii.gov, opendata hawaii(?) <https://opendata.hawaii.gov/dataset/watersheds>
+
+Elevation: I want to make the image clearer, find the best place to farm based on elevation.
+
+-Find a satellite image
+
+```{r}
+library(terra)
+
+dem1 <- rast("USGS_13_n22w158_20250611.tif")
+dem2 <- rast("USGS_13_n22w159_20250611.tif")
+```
+
+```{r}
+dem <- mosaic(dem1, dem2)
+plot(dem, main="Oahu Elevation (meters)")
+```
+
+Satellite map (Elevation is now working, Just need something for slope)
+
+```{r}
+library(terra)
+library(leaflet)
+
+dem <- mosaic(dem1, dem2)
+dem_wgs84 <- project(dem, "EPSG:4326")
+
+# Aggregate to reduce size (factor = 4 means 1/4 resolution)
+dem_agg <- aggregate(dem_wgs84, fact = 4, fun = "mean")
+
+# Check size — keep reducing 'fact' until it works
+# fact=4 reduces ~16x, fact=6 reduces ~36x
+
+pal <- colorNumeric(
+  palette = c("#300060", "#00AACC", "#FFFF00"),
+  values(dem_agg),
+  na.color = "transparent"
+)
+
+leaflet() %>%
+  addProviderTiles(providers$Esri.WorldImagery) %>%
+  addRasterImage(dem_agg, colors = pal, opacity = 0.6) %>%
+  addLegend(pal = pal, values = values(dem_agg),
+            title = "Elevation (m)", position = "bottomright")
+```
+
+Rainfall: <https://www.hawaii.edu/climate-data-portal/data-portal/>
+
+Soil quality
