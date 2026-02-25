@@ -6,9 +6,9 @@ editor: visual
 
 ## Spatial Optimization Project
 
-Description: Main Question: Where are the most optimal locations on Oahu to make new farms based on environmental suitability, market access, and regulatory constraints? (Rainfall and ignition probability, just waiting on email with package)
+Description: Zoning, Rainfall, Soil Type,
 
-1.  Soil Quality
+1.  Soil type
 
     1.  Soil type (map it out)
 
@@ -20,27 +20,19 @@ Description: Main Question: Where are the most optimal locations on Oahu to make
 
     1.  Rainfall data/Annual precipitation
 
-    2.  Distance to streams/springs
-
 <!-- -->
 
-3.  Slope and Elvelation
+3.  Zoning
 
-    1.  Farms prefer gentle slopes
+To spatially optimize a dryland kalo farm on Oahu, this project will focus specifically on agricultural zoning, rainfall patterns, and soil type to identify the most suitable locations for cultivation.
 
-    2.  Too steep means erosion risk and equipment limitations.
+First, I will map agricultural zoning districts across Oahu to determine where farming activities are legally permitted and prioritized. Areas designated for agriculture will serve as the foundation of the suitability analysis, while non-agricultural or highly restricted zones will be excluded from consideration.
 
-<!-- -->
+Next, I will analyze rainfall data to evaluate water availability for dryland kalo production. Because dryland kalo relies on natural precipitation rather than irrigated loʻi systems, areas with moderate and consistent rainfall will rank higher in suitability. Rainfall maps will highlight zones that receive sufficient precipitation to sustain crop growth without excessive drought stress.
 
-4.  Ignition risk
+I will then create a soil type map to identify and classify soils across the island. Particular attention will be given to well-drained, nutrient-rich volcanic soils that are well suited for kalo cultivation. Soil units known to support productive agriculture will receive higher suitability scores, while shallow, rocky, or poorly drained soils will rank lower.
 
-    1.  Historical wildfire ignition points
-
-    2.  Drought-prone areas
-
-    3.  Areas with lower ignition risk will be ranked higher in suitability for long-term farm development.
-
-This project will look at the optimal locations to build new farms on Oahu. The goal is to find areas that are environmentally suitable, close to markets, and practical for farming operations. I will create a soil quality map showing different soil types across the island and highlight the soils that are best for agriculture. Areas with better soil will rank higher in suitability. Next, I will create a water availability map using annual rainfall data and distance to streams or springs. Farms need reliable water, so areas with more rainfall or closer water sources will score higher. Then, I will map slope and elevation to show which areas are flat or gently sloped. Since steep land increases erosion risk and makes equipment use difficult, flatter areas will be considered more suitable. I will also create an ignition risk map that will identify areas more susceptible to wildfire. Lower ranked areas will be ranked as more suitable for long term agriculture use. Finally, I will combine all of these mapped layers into one spatial suitability map using a weighted overlay model. This final map will show the most optimal locations for new farms on the island based on environmental conditions.
+Finally, I will combine agricultural zoning, rainfall, and soil data into a weighted spatial overlay model. This integrated suitability map will identify the most optimal locations for establishing a dryland kalo farm on Oʻahu based on regulatory feasibility, water availability, and soil quality.
 
 (Hawaii climate data portal, geoportal.hawaii.gov, opendata hawaii(?) <https://opendata.hawaii.gov/dataset/watersheds>
 
@@ -90,4 +82,126 @@ leaflet() %>%
 
 Rainfall: <https://www.hawaii.edu/climate-data-portal/data-portal/>
 
-Soil quality
+```{r}
+library(terra)
+library(leaflet)
+
+# Load all files from 2020-2026
+all_files <- list.files("data_map", 
+                         pattern = "\\.tif$", 
+                         full.names = TRUE, 
+                         recursive = TRUE)
+
+# Filter to only 2020-2026
+files_2020_2026 <- all_files[grepl("/(202[0-6])/", all_files)]
+cat("Files found:", length(files_2020_2026), "\n")
+
+# Stack and compute mean
+rain_stack      <- rast(files_2020_2026)
+rain_mean       <- app(rain_stack, mean, na.rm = TRUE)
+rain_mean_wgs84 <- project(rain_mean, "EPSG:4326")
+
+# All blue, no white
+pal <- colorNumeric(
+  palette = c("#4A90D9", "#1A5276", "#0B2545"),
+  values(rain_mean_wgs84),
+  na.color = "transparent"
+)
+
+# Interactive map
+leaflet() %>%
+  addProviderTiles(providers$Esri.WorldImagery) %>%
+  addRasterImage(rain_mean_wgs84, 
+                 colors  = pal, 
+                 opacity = 0.7,
+                 maxBytes = 20 * 1024 * 1024) %>%
+  addLegend(pal      = pal, 
+            values   = values(rain_mean_wgs84),
+            title    = "Avg Monthly<br>Rainfall (mm)", 
+            position = "bottomright") %>%
+  addControl("<b>Average Monthly Rainfall 2020–2026</b>", 
+             position = "topright")
+```
+
+Zoning:
+
+```{r}
+library(sf)
+library(here)
+library(dplyr)
+library(mapview)
+
+zoning <- st_read(here("Zoning.geojson"), quiet = TRUE)
+
+ag2_land <- zoning |>
+  filter(zone_class == "AG-2") |>
+  st_make_valid()
+
+mapview(ag2_land,
+        col.regions = "goldenrod",
+        alpha.regions = 0.4,
+        layer.name = "AG-2 General Agriculture")
+```
+
+Rainfall + Agricultural Zoning
+
+```{r}
+library(terra)
+library(leaflet)
+library(sf)
+library(here)
+library(dplyr)
+
+# --- Rainfall ---
+all_files <- list.files("data_map", 
+                         pattern = "\\.tif$", 
+                         full.names = TRUE, 
+                         recursive = TRUE)
+
+files_2020_2026 <- all_files[grepl("/(202[0-6])/", all_files)]
+
+rain_stack      <- rast(files_2020_2026)
+rain_mean       <- app(rain_stack, mean, na.rm = TRUE)
+rain_mean_wgs84 <- project(rain_mean, "EPSG:4326")
+
+# --- AG-2 Zones ---
+zoning <- st_read(here("Zoning.geojson"), quiet = TRUE)
+
+ag2_land <- zoning |>
+  filter(zone_class == "AG-2") |>
+  st_make_valid() |>
+  st_transform(crs = 4326)  # make sure CRS matches rainfall
+
+# --- Mask rainfall to AG-2 only ---
+ag2_vect        <- vect(ag2_land)                        # convert to terra format
+rain_masked     <- mask(rain_mean_wgs84, ag2_vect)       # mask to AG-2 boundary
+rain_cropped    <- crop(rain_masked, ag2_vect)           # crop extent too
+
+# --- Color palette ---
+pal <- colorNumeric(
+  palette  = c("#4A90D9", "#1A5276", "#0B2545"),
+  values(rain_cropped),
+  na.color = "transparent"
+)
+
+# --- Map ---
+leaflet() %>%
+  addProviderTiles(providers$Esri.WorldImagery) %>%
+  addPolygons(data        = ag2_land,
+              fillColor   = "transparent",
+              color       = "goldenrod",
+              weight      = 1.5,
+              opacity     = 0.9,
+              group       = "AG-2 Boundary") %>%
+  addRasterImage(rain_cropped,
+                 colors   = pal,
+                 opacity  = 0.75,
+                 maxBytes = 20 * 1024 * 1024) %>%
+  addLegend(pal      = pal,
+            values   = values(rain_cropped),
+            title    = "Avg Monthly<br>Rainfall (mm)",
+            position = "bottomright") %>%
+  addControl("<b>Average Monthly Rainfall 2020–2026<br>AG-2 Zones Only</b>",
+             position = "topright") %>%
+  addLayersControl(overlayGroups = "AG-2 Boundary")
+```
