@@ -205,3 +205,58 @@ leaflet() %>%
              position = "topright") %>%
   addLayersControl(overlayGroups = "AG-2 Boundary")
 ```
+
+Soil Data
+
+```{r}
+library(sf)
+library(leaflet)
+library(dplyr)
+
+# Read soil data
+soils <- st_read("hawaii_soils_with_orders.geojson", quiet = TRUE)
+
+# Check what columns are available
+names(soils)
+unique(soils$order)  # adjust column name if different
+```
+
+```{r}
+library(sf)
+library(leaflet)
+library(dplyr)
+
+# Read soil data
+soils <- st_read("hawaii_soils_with_orders.geojson", quiet = TRUE) |>
+  st_transform(crs = 4326)
+
+# Color palette by soil order
+pal <- colorFactor(
+  palette = "Set3",
+  domain  = soils$taxorder
+)
+
+# Map
+leaflet(soils) %>%
+  addProviderTiles(providers$Esri.WorldImagery) %>%
+  addPolygons(
+    fillColor   = ~pal(taxorder),
+    fillOpacity = 0.6,
+    color       = "white",
+    weight      = 0.5,
+    label       = ~paste0(taxorder, " - ", compname),
+    highlightOptions = highlightOptions(
+      weight      = 2,
+      color       = "white",
+      fillOpacity = 0.9,
+      bringToFront = TRUE
+    )
+  ) %>%
+  addLegend(
+    pal      = pal,
+    values   = ~taxorder,
+    title    = "Soil Order",
+    position = "bottomright"
+  ) %>%
+  addControl("<b>Hawaii Soil Orders</b>", position = "topright")
+```
