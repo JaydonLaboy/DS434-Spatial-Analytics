@@ -32,13 +32,9 @@ Next, I will analyze rainfall data to evaluate water availability for dryland ka
 
 I will then create a soil type map to identify and classify soils across the island. Particular attention will be given to well-drained, nutrient-rich volcanic soils that are well suited for kalo cultivation. Soil units known to support productive agriculture will receive higher suitability scores, while shallow, rocky, or poorly drained soils will rank lower.
 
-Finally, I will combine agricultural zoning, rainfall, and soil data into a weighted spatial overlay model. This integrated suitability map will identify the most optimal locations for establishing a dryland kalo farm on Oʻahu based on regulatory feasibility, water availability, and soil quality.
+Finally, I will combine agricultural zoning, rainfall, and soil data to identify the most optimal locations for establishing a dryland kalo farm on Oʻahu based on regulatory feasibility, water availability, and soil quality.
 
 (Hawaii climate data portal, geoportal.hawaii.gov, opendata hawaii(?) <https://opendata.hawaii.gov/dataset/watersheds>
-
-Elevation: I want to make the image clearer, find the best place to farm based on elevation.
-
--Find a satellite image
 
 ```{r}
 library(terra)
