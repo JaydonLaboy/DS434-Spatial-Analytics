@@ -1,0 +1,158 @@
+---
+title: "MarineDebris"
+format: html
+editor: visual
+---
+
+```{r}
+# Load required libraries
+library(tidyverse)
+
+# ── 1. Load the data ──────────────────────────────────────────────────────────
+df <- read_csv("all_data.csv")
+```
+
+Summary of Statistics
+
+```{r}
+cat("=== DIMENSIONS ===\n")
+cat("Rows:", nrow(df), " | Columns:", ncol(df), "\n\n")
+
+cat("=== COLUMN NAMES & TYPES ===\n")
+glimpse(df)
+
+cat("\n=== FIRST 6 ROWS ===\n")
+print(head(df))
+
+cat("\n=== SUMMARY STATISTICS ===\n")
+print(summary(df))
+```
+
+Class Distribution
+
+```{r}
+label_map <- c("1" = "Water", "2" = "Plastic", "3" = "Driftwood",
+               "4" = "Seaweed", "5" = "Pumice", "6" = "Sea Snot", "7" = "Sea Foam")
+
+cat("\n=== CLASS DISTRIBUTION ===\n")
+class_counts <- df %>%
+  count(label) %>%
+  mutate(
+    class_name = label_map[as.character(label)],
+    pct        = round(n / sum(n) * 100, 2)
+  ) %>%
+  arrange(label)
+
+print(class_counts)
+```
+
+Bar plot of class distribution
+
+```{r}
+ggplot(class_counts, aes(x = reorder(class_name, label), y = n, fill = class_name)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  geom_text(aes(label = paste0(pct, "%")), vjust = -0.4, size = 3.5) +
+  scale_y_continuous(labels = scales::comma) +
+  labs(
+    title    = "Class Distribution in all_data.csv",
+    subtitle = "Highly imbalanced dataset",
+    x        = "Class",
+    y        = "Pixel Count"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+```
+
+Box plot (feature distribution by class: Claude
+
+```{r}
+library(tidyverse)
+
+# ── Load data ─────────────────────────────────────────────────────────────────
+df <- read_csv("all_data.csv")
+
+# ── Label mapping ─────────────────────────────────────────────────────────────
+label_map <- c("1" = "Water", "2" = "Plastic", "3" = "Driftwood",
+               "4" = "Seaweed", "5" = "Pumice", "6" = "Sea Snot", "7" = "Sea Foam")
+
+df <- df %>%
+  mutate(class_name = factor(label_map[as.character(label)],
+                             levels = label_map))
+
+# ── Get numeric feature columns (excluding label) ────────────────────────────
+feature_cols <- df %>% select(where(is.numeric), -label) %>% names()
+
+# ── Pivot to long format for faceted plotting ─────────────────────────────────
+df_long <- df %>%
+  select(class_name, all_of(feature_cols)) %>%
+  pivot_longer(-class_name, names_to = "feature", values_to = "value")
+
+# ── Box plot: one facet per feature ───────────────────────────────────────────
+ggplot(df_long, aes(x = class_name, y = value, fill = class_name)) +
+  geom_boxplot(outlier.size = 0.3, outlier.alpha = 0.3, show.legend = FALSE) +
+  facet_wrap(~ feature, scales = "free_y") +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Feature Distribution by Class",
+    x     = "Class",
+    y     = "Value"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.x  = element_text(angle = 35, hjust = 1, size = 8),
+    strip.text   = element_text(face = "bold"),
+    plot.title   = element_text(face = "bold", size = 14)
+  )
+
+# ── Save plot ─────────────────────────────────────────────────────────────────
+ggsave("boxplot_all_features.png", width = 14, height = 10, dpi = 150)
+cat("Plot saved to boxplot_all_features.png\n")
+```
+
+```{r}
+df %>%
+  select(class_name, all_of(key_features)) %>%
+  pivot_longer(-class_name, names_to = "feature", values_to = "value") %>%
+  ggplot(aes(x = value, fill = class_name, colour = class_name)) +
+  geom_density(alpha = 0.3, linewidth = 0.6) +
+  facet_wrap(~ feature, scales = "free") +
+  scale_fill_brewer(palette = "Set2") +
+  scale_colour_brewer(palette = "Set2") +
+  labs(title = "Density Plots — Key Spectral Indices",
+       subtitle = "Overlapping curves reveal class separability",
+       x = "Value", y = "Density", fill = "Class", colour = "Class") +
+  theme_minimal(base_size = 12) +
+  theme(strip.text = element_text(face = "bold"),
+        legend.position = "bottom")
+```
+
+```{r}
+library(tidyverse)
+library(leaflet)
+
+df <- read_csv("all_data.csv")
+
+label_map <- c("1" = "Water", "2" = "Plastic", "3" = "Driftwood",
+               "4" = "Seaweed", "5" = "Pumice", "6" = "Sea Snot", "7" = "Sea Foam")
+
+df <- df %>%
+  mutate(class_name = factor(label_map[as.character(label)], levels = label_map))
+
+df_sample <- df %>% group_by(class_name) %>% slice_sample(n = 300)
+
+pal <- colorFactor(palette = "Set2", domain = df_sample$class_name)
+
+#MAP(Ithink)
+leaflet(df_sample) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    lng         = ~Longitude,
+    lat         = ~Latitude,
+    color       = ~pal(class_name),
+    radius      = 4,
+    stroke      = FALSE,
+    fillOpacity = 0.7,
+    popup       = ~paste("Class:", class_name)
+  ) %>%
+  addLegend("bottomright", pal = pal, values = ~class_name, title = "Class")
+```
