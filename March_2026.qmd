@@ -1,0 +1,134 @@
+---
+title: "March_Rainfall_2026"
+format: html
+editor: visual
+---
+
+## March Rainfall event 2026
+
+Shinyapp with slider
+
+```{r}
+library(shiny)
+library(terra)
+library(leaflet)
+library(viridis)
+library(raster)
+
+raster_dir <- "C:/Users/Public/DS434-SpacialAnalysis/HCDP_data"
+tif_files <- sort(list.files(raster_dir, pattern = "rainfall_new_day_statewide_se_2026_03_\\d{2}\\.tif$",
+                             full.names = TRUE, recursive = TRUE))
+
+dates <- seq(as.Date("2026-03-01"), as.Date("2026-03-24"), by = "day")
+
+ui <- fluidPage(
+  tags$head(tags$style(HTML("
+    body, .container-fluid { background-color: #1a1a2e; color: white; margin: 0; padding: 0; }
+
+    #map { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
+
+    #slider-panel {
+      position: fixed;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: rgba(15, 15, 40, 0.85);
+      border-radius: 16px;
+      padding: 20px 40px 10px 40px;
+      width: 80vw;
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(167, 139, 250, 0.3);
+    }
+
+    #date_label {
+      text-align: center;
+      font-size: 22px;
+      font-weight: bold;
+      color: #a78bfa;
+      margin-bottom: 8px;
+      letter-spacing: 2px;
+    }
+
+    .irs--shiny .irs-bar { background: #7c3aed; border-top: 1px solid #7c3aed; border-bottom: 1px solid #7c3aed; }
+    .irs--shiny .irs-line { background: rgba(255,255,255,0.15); }
+    .irs--shiny .irs-handle { background: #a78bfa; border: 2px solid white; width: 22px; height: 22px; top: 22px; }
+    .irs--shiny .irs-from, .irs--shiny .irs-to, .irs--shiny .irs-single { display: none !important; }
+    .irs--shiny .irs-min, .irs--shiny .irs-max { display: none !important; }
+    .irs--shiny .irs-grid-text { color: rgba(255,255,255,0.6); font-size: 11px; }
+
+    #title-overlay {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      color: white;
+      font-size: 26px;
+      font-weight: bold;
+      letter-spacing: 2px;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+      background: rgba(15,15,40,0.6);
+      padding: 10px 30px;
+      border-radius: 12px;
+      backdrop-filter: blur(6px);
+    }
+  "))),
+
+  div(id = "title-overlay", "🌧 Hawaii Daily Rainfall — March 2026"),
+  leafletOutput("map", width = "100%", height = "100vh"),
+
+  div(id = "slider-panel",
+    div(id = "date_label", uiOutput("date_display")),
+    sliderInput("day", label = NULL,
+                min = 1, max = 24, value = 1, step = 1, width = "100%",
+                animate = animationOptions(interval = 300, loop = TRUE))
+  )
+)
+
+server <- function(input, output, session) {
+
+  current_raster <- reactive({
+    req(input$day)
+    r <- rast(tif_files[input$day])
+    project(r, "EPSG:4326")
+  })
+
+  output$date_display <- renderUI({
+    req(input$day)
+    span(format(dates[input$day], "%B %d, %Y"))
+  })
+
+  output$map <- renderLeaflet({
+    leaflet() %>%
+      addProviderTiles(providers$CartoDB.DarkMatter) %>%
+      setView(lng = -157.5, lat = 20.5, zoom = 7)
+  })
+
+  observeEvent(input$day, {
+    req(current_raster())
+    r <- current_raster()
+    vals <- values(r, na.rm = TRUE)
+
+    pal <- colorNumeric(
+      palette = viridis(100, option = "D"),
+      domain = c(0, max(vals)),
+      na.color = "transparent"
+    )
+
+    leafletProxy("map") %>%
+      clearImages() %>%
+      clearControls() %>%
+      addRasterImage(raster::raster(r), colors = pal, opacity = 0.85) %>%
+      addLegend(
+        position = "bottomright",
+        pal = pal,
+        values = vals,
+        title = "Rainfall (mm)",
+        labFormat = labelFormat(suffix = " mm")
+      )
+  })
+}
+
+shinyApp(ui, server)
+```
