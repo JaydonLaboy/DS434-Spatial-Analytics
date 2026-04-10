@@ -203,10 +203,14 @@ leaflet() %>%
 ```
 
 <<<<<<< HEAD
+Soil Data
+=======
+<<<<<<< HEAD
 Soil
 =======
 Soil Data
 >>>>>>> ff9009b9f7ef5f870c10aa863b24e77ebf5ee38f
+>>>>>>> eac452cac1331e622ba17cee2d675727b1c9f6ab
 
 ```{r}
 library(sf)
