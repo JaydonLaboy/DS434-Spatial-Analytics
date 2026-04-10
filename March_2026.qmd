@@ -132,3 +132,207 @@ server <- function(input, output, session) {
 
 shinyApp(ui, server)
 ```
+
+Manual Slider attempt
+
+```{r}
+library(shiny)
+library(terra)
+library(leaflet)
+library(viridis)
+library(raster)
+
+# ── File list ─────────────────────────────────────────────────────────────────
+raster_dir <- "C:/Users/jaydo/OneDrive/Desktop/ds434/DS434-SpacialAnalysis/march_2026/rainfall/new/day/statewide/se/2026/03"
+tif_files  <- sort(list.files(raster_dir, pattern = "\\.tif$", full.names = TRUE))
+dates      <- seq(as.Date("2026-03-01"), by = "day", length.out = length(tif_files))
+
+ui <- fluidPage(
+  tags$head(tags$style(HTML("
+    body, .container-fluid { background-color: #1a1a2e; color: white; margin: 0; padding: 0; }
+    #map { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
+    #slider-panel {
+      position: fixed; bottom: 40px; left: 50%;
+      transform: translateX(-50%); z-index: 1000;
+      background: rgba(15, 15, 40, 0.85); border-radius: 16px;
+      padding: 20px 40px 10px 40px; width: 80vw;
+      backdrop-filter: blur(8px); border: 1px solid rgba(167, 139, 250, 0.3);
+    }
+    #date_label { text-align: center; font-size: 22px; font-weight: bold;
+      color: #a78bfa; margin-bottom: 8px; letter-spacing: 2px; }
+    .irs--shiny .irs-bar { background: #7c3aed; border-top: 1px solid #7c3aed; border-bottom: 1px solid #7c3aed; }
+    .irs--shiny .irs-line { background: rgba(255,255,255,0.15); }
+    .irs--shiny .irs-handle { background: #a78bfa; border: 2px solid white; width: 22px; height: 22px; top: 22px; }
+    .irs--shiny .irs-from, .irs--shiny .irs-to, .irs--shiny .irs-single { display: none !important; }
+    .irs--shiny .irs-min, .irs--shiny .irs-max { display: none !important; }
+    .irs--shiny .irs-grid-text { color: rgba(255,255,255,0.6); font-size: 11px; }
+    #title-overlay {
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+      z-index: 1000; color: white; font-size: 26px; font-weight: bold;
+      letter-spacing: 2px; text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+      background: rgba(15,15,40,0.6); padding: 10px 30px;
+      border-radius: 12px; backdrop-filter: blur(6px);
+    }
+  "))),
+  div(id = "title-overlay", "🌧 Hawaii Daily Rainfall — March 2026"),
+  leafletOutput("map", width = "100%", height = "100vh"),
+  div(id = "slider-panel",
+    div(id = "date_label", uiOutput("date_display")),
+    sliderInput("day", label = NULL,
+                min   = 1,
+                max   = length(tif_files),
+                value = 1,
+                step  = 1,
+                width = "100%",
+                ticks = TRUE),   # animation removed
+    div(style = "display: flex; justify-content: space-between; margin-top: -5px; padding: 0 2px;",
+        lapply(seq(1, length(dates), by = 2), function(i) {
+          div(style = "color: rgba(255,255,255,0.5); font-size: 10px; text-align: center;",
+              format(dates[i], "%b %d"))
+        })
+    )
+  )
+)
+
+server <- function(input, output, session) {
+
+  current_raster <- reactive({
+    req(input$day)
+    req(input$day <= length(tif_files))
+    r <- rast(tif_files[input$day])
+    project(r, "EPSG:4326")
+  })
+
+  output$date_display <- renderUI({
+    req(input$day)
+    span(format(dates[input$day], "%B %d, %Y"))
+  })
+
+  output$map <- renderLeaflet({
+    leaflet() %>%
+      addProviderTiles(providers$CartoDB.DarkMatter) %>%
+      setView(lng = -157.5, lat = 20.5, zoom = 7)
+  })
+
+  observeEvent(input$day, {
+    req(current_raster())
+    r    <- current_raster()
+    vals <- values(r, na.rm = TRUE)
+    pal  <- colorNumeric(
+      palette  = viridis(100, option = "D"),
+      domain   = c(0, max(vals)),
+      na.color = "transparent"
+    )
+    leafletProxy("map") %>%
+      clearImages() %>%
+      clearControls() %>%
+      addRasterImage(raster::raster(r), colors = pal, opacity = 0.85) %>%
+      addLegend(
+        position  = "bottomright",
+        pal       = pal,
+        values    = vals,
+        title     = "Rainfall (mm)",
+        labFormat = labelFormat(suffix = " mm")
+      )
+  })
+}
+
+shinyApp(ui, server)
+```
+
+**Graphs (Partial station data)**
+
+Reading the CSV
+
+```{r}
+df <- read.csv("C:/Users/jaydo/OneDrive/Desktop/ds434/DS434-SpacialAnalysis/march_2026/rainfall/new/day/statewide/partial/station_data/2026/03/rainfall_new_day_statewide_partial_station_data_2026_03.csv")
+
+# ── Pivot to long format ──────────────────────────────────────────────────────
+date_cols <- names(df)[grepl("X2026", names(df))]
+
+df_long <- df %>%
+  pivot_longer(cols = all_of(date_cols),
+               names_to  = "date",
+               values_to = "rainfall") %>%
+  mutate(date = as.Date(gsub("X", "", date), format = "%Y.%m.%d"))
+```
+
+Total Daily Rainfall across all stations
+
+```{r}
+df_daily <- df_long %>%
+  group_by(date) %>%
+  summarise(mean_rainfall = mean(rainfall, na.rm = TRUE))
+
+ggplot(df_daily, aes(x = date, y = mean_rainfall)) +
+  geom_col(fill = "#4a90d9", alpha = 0.8) +
+  geom_line(colour = "white", linewidth = 0.8) +
+  geom_point(colour = "white", size = 2) +
+  scale_x_date(date_labels = "%b %d", date_breaks = "2 days") +
+  labs(title = "Average Daily Rainfall — March 2026",
+       subtitle = "Mean across all stations",
+       x = "Date", y = "Rainfall (mm)") +
+  theme_minimal(base_size = 13) +
+  theme(axis.text.x       = element_text(angle = 45, hjust = 1),
+        plot.background   = element_rect(fill = "#1a1a2e", colour = NA),
+        panel.background  = element_rect(fill = "#1a1a2e", colour = NA),
+        text              = element_text(colour = "white"),
+        axis.text         = element_text(colour = "white"),
+        panel.grid        = element_line(colour = "grey30"))
+```
+
+Heatmap
+
+```{r}
+library(tidyverse)
+
+# ── Load ──────────────────────────────────────────────────────────────────────
+df <- read.csv("C:/Users/jaydo/OneDrive/Desktop/ds434/DS434-SpacialAnalysis/march_2026/rainfall/new/day/statewide/partial/station_data/2026/03/rainfall_new_day_statewide_partial_station_data_2026_03.csv")
+
+# ── Pivot to long format ──────────────────────────────────────────────────────
+date_cols <- names(df)[grepl("X2026", names(df))]
+
+df_long <- df %>%
+  pivot_longer(cols      = all_of(date_cols),
+               names_to  = "date",
+               values_to = "rainfall") %>%
+  mutate(date = as.Date(gsub("X", "", date), format = "%Y.%m.%d"))
+
+# ── Station totals ────────────────────────────────────────────────────────────
+df_stations <- df_long %>%
+  group_by(Station.Name, Island) %>%
+  summarise(total = sum(rainfall, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(total)) %>%
+  head(10)
+
+df_daily <- df_long %>%
+  group_by(date) %>%
+  summarise(mean_rainfall = mean(rainfall, na.rm = TRUE))
+
+df_heat <- df_long %>%
+  filter(Station.Name %in% df_stations$Station.Name)
+
+cat("✅ All data objects created successfully\n")
+cat("df_long rows:", nrow(df_long), "\n")
+cat("df_stations rows:", nrow(df_stations), "\n")
+cat("df_heat rows:", nrow(df_heat), "\n")
+```
+
+```{r}
+df_heat <- df_long %>%
+  filter(Station.Name %in% df_stations$Station.Name)
+
+ggplot(df_heat, aes(x = date, y = reorder(Station.Name, rainfall, sum), fill = rainfall)) +
+  geom_tile(colour = "grey20") +
+  scale_fill_viridis_c(option = "D", na.value = "grey30", name = "mm") +
+  scale_x_date(date_labels = "%b %d", date_breaks = "2 days") +
+  labs(title = "Daily Rainfall Heatmap — Top 10 Stations",
+       x = "Date", y = NULL) +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.x       = element_text(angle = 45, hjust = 1),
+        plot.background   = element_rect(fill = "#1a1a2e", colour = NA),
+        panel.background  = element_rect(fill = "#1a1a2e", colour = NA),
+        text              = element_text(colour = "white"),
+        axis.text         = element_text(colour = "white"),
+        panel.grid        = element_line(colour = "grey10"))
+```
