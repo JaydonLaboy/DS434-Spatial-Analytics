@@ -245,6 +245,8 @@ shinyApp(ui, server)
 Reading the CSV
 
 ```{r}
+library(tidyverse)
+
 df <- read.csv("C:/Users/jaydo/OneDrive/Desktop/ds434/DS434-SpacialAnalysis/march_2026/rainfall/new/day/statewide/partial/station_data/2026/03/rainfall_new_day_statewide_partial_station_data_2026_03.csv")
 
 # ── Pivot to long format ──────────────────────────────────────────────────────
@@ -335,4 +337,182 @@ ggplot(df_heat, aes(x = date, y = reorder(Station.Name, rainfall, sum), fill = r
         text              = element_text(colour = "white"),
         axis.text         = element_text(colour = "white"),
         panel.grid        = element_line(colour = "grey10"))
+```
+
+Interactive components
+
+```{r}
+library(tidyverse)
+
+df <- read.csv("C:/Users/jaydo/OneDrive/Desktop/ds434/DS434-SpacialAnalysis/march_2026/rainfall/new/day/statewide/partial/station_data/2026/03/rainfall_new_day_statewide_partial_station_data_2026_03.csv")
+
+# ── Pivot to long format ──────────────────────────────────────────────────────
+date_cols <- names(df)[grepl("X2026", names(df))]
+
+df_long <- df %>%
+  pivot_longer(cols = all_of(date_cols),
+               names_to  = "date",
+               values_to = "rainfall") %>%
+  mutate(date = as.Date(gsub("X", "", date), format = "%Y.%m.%d"))
+```
+
+Total Daily Rainfall across all stations (Plotly)
+
+```{r}
+library(tidyverse)
+library(plotly)
+
+df_daily <- df_long %>%
+  group_by(date) %>%
+  summarise(mean_rainfall = mean(rainfall, na.rm = TRUE) * 0.0394)
+
+p <- ggplot(df_daily, aes(x = date, y = mean_rainfall,
+                           text = paste0("Date: ", format(date, "%b %d"),
+                                         "<br>Rainfall: ", round(mean_rainfall, 2), " in"))) +
+  geom_col(fill = "#4a90d9", alpha = 0.8) +
+  geom_line(colour = "white", linewidth = 0.8) +
+  geom_point(colour = "white", size = 2) +
+  scale_x_date(date_labels = "%b %d", date_breaks = "2 days") +
+  labs(title = "Average Daily Rainfall — March 2026",
+       subtitle = "Mean across all stations",
+       x = "Date", y = "Rainfall (in)") +
+  theme_minimal(base_size = 13) +
+  theme(axis.text.x      = element_text(angle = 45, hjust = 1),
+        plot.background  = element_rect(fill = "#1a1a2e", colour = NA),
+        panel.background = element_rect(fill = "#1a1a2e", colour = NA),
+        text             = element_text(colour = "white"),
+        axis.text        = element_text(colour = "white"),
+        panel.grid       = element_line(colour = "grey30"))
+
+ggplotly(p, tooltip = "text")
+```
+
+Heatmap Plotly
+
+```{r}
+library(tidyverse)
+library(plotly)
+
+df_heat <- df_long %>%
+  filter(Station.Name %in% df_stations$Station.Name) %>%
+  mutate(rainfall_in = round(rainfall * 0.0394, 2))
+
+p <- ggplot(df_heat, aes(x = date, 
+                          y = reorder(Station.Name, rainfall, sum), 
+                          fill = rainfall_in,
+                          text = paste0("Station: ", Station.Name,
+                                        "<br>Date: ", format(date, "%b %d"),
+                                        "<br>Rainfall: ", rainfall_in, " in"))) +
+  geom_tile(colour = "grey20") +
+  scale_fill_viridis_c(option = "D", na.value = "grey30", name = "in") +
+  scale_x_date(date_labels = "%b %d", date_breaks = "2 days") +
+  labs(title = "Daily Rainfall Heatmap — Top 10 Stations",
+       x = "Date", y = NULL) +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.x      = element_text(angle = 45, hjust = 1),
+        plot.background  = element_rect(fill = "#1a1a2e", colour = NA),
+        panel.background = element_rect(fill = "#1a1a2e", colour = NA),
+        text             = element_text(colour = "white"),
+        axis.text        = element_text(colour = "white"),
+        panel.grid       = element_line(colour = "grey10"))
+
+ggplotly(p, tooltip = "text")
+```
+
+ggiraph
+
+```{r}
+library(tidyverse)
+library(ggiraph)
+library(maps)
+library(sf)
+library(patchwork)
+
+# ── Hawaii basemap ────────────────────────────────────────────────────────────
+hawaii_map <- st_as_sf(map("world", region = "USA:Hawaii", plot = FALSE, fill = TRUE)) %>%
+  st_set_crs(4326)
+
+# ── Add tooltip and data_id to heatmap data ───────────────────────────────────
+df_heat <- df_long %>%
+  filter(Station.Name %in% df_stations$Station.Name) %>%
+  mutate(
+    rainfall_in = round(rainfall * 0.0394, 2),
+    tooltip     = paste0("Station: ", Station.Name,
+                         "\nDate: ", format(date, "%b %d"),
+                         "\nRainfall: ", rainfall_in, " in"),
+    data_id     = Station.Name  # links heatmap to map
+  )
+
+# ── Add tooltip and data_id to station map points ────────────────────────────
+df_map_points <- df %>%
+  filter(Station.Name %in% df_stations$Station.Name) %>%
+  mutate(
+    total_in = round(rowSums(select(., starts_with("X2026")), na.rm = TRUE) * 0.0394, 2),
+    tooltip  = paste0("Station: ", Station.Name,
+                      "\nIsland: ", Island,
+                      "\nTotal Rainfall: ", total_in, " in"),
+    data_id  = Station.Name  # must match heatmap data_id
+  )
+
+# ── Heatmap ───────────────────────────────────────────────────────────────────
+p_heat <- ggplot(df_heat, aes(x = date,
+                               y = reorder(Station.Name, rainfall, sum),
+                               fill = rainfall_in,
+                               tooltip = tooltip,
+                               data_id = data_id)) +
+  geom_tile_interactive(colour = "grey20") +
+  scale_fill_viridis_c(option = "D", na.value = "grey30", name = "in") +
+  scale_x_date(date_labels = "%b %d", date_breaks = "2 days") +
+  labs(title = "Daily Rainfall Heatmap — Top 10 Stations",
+       x = "Date", y = NULL) +
+  theme_minimal(base_size = 11) +
+  theme(axis.text.x      = element_text(angle = 45, hjust = 1),
+        plot.background  = element_rect(fill = "#1a1a2e", colour = NA),
+        panel.background = element_rect(fill = "#1a1a2e", colour = NA),
+        text             = element_text(colour = "white"),
+        axis.text        = element_text(colour = "white"),
+        panel.grid       = element_line(colour = "grey10"),
+        legend.background = element_rect(fill = "#1a1a2e"),
+        plot.title       = element_text(colour = "white", face = "bold"))
+
+# ── Hawaii map with stations ──────────────────────────────────────────────────
+p_map <- ggplot() +
+  geom_sf(data = hawaii_map, fill = "#2d4a6e", colour = "white", linewidth = 0.4) +
+  geom_point_interactive(
+    data    = df_map_points,
+    aes(x = LON, y = LAT,
+        colour  = total_in,
+        tooltip = tooltip,
+        data_id = data_id),
+    size  = 4,
+    alpha = 0.9
+  ) +
+  scale_colour_viridis_c(option = "D", name = "Total (in)") +
+  labs(title = "Station Locations — Top 10",
+       x = NULL, y = NULL) +
+  theme_minimal(base_size = 11) +
+  theme(plot.background  = element_rect(fill = "#1a1a2e", colour = NA),
+        panel.background = element_rect(fill = "#1a1a2e", colour = NA),
+        text             = element_text(colour = "white"),
+        axis.text        = element_text(colour = "white"),
+        panel.grid       = element_line(colour = "grey20"),
+        legend.background = element_rect(fill = "#1a1a2e"),
+        plot.title       = element_text(colour = "white", face = "bold"))
+
+# ── Combine and render with linking ──────────────────────────────────────────
+girafe(
+  ggobj = p_heat + p_map,
+  width_svg  = 14,
+  height_svg = 5,
+  options = list(
+    opts_hover(css = "fill:orange; stroke:white; stroke-width:1.5; r:6px;"),
+    opts_hover_inv(css = "opacity:0.2;"),
+    opts_selection(
+      type = "single",
+      css  = "fill:orange; stroke:white; stroke-width:2;"
+    ),
+    opts_toolbar(saveaspng = TRUE),
+    opts_sizing(rescale = TRUE)
+  )
+)
 ```
