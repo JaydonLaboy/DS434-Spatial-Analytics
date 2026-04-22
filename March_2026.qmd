@@ -516,3 +516,136 @@ girafe(
   )
 )
 ```
+
+```{r}
+library(tidyverse)
+library(ggiraph)
+library(maps)
+library(sf)
+library(patchwork)
+
+# ── Hawaii basemap (no CRS override) ─────────────────────────────────────────
+hawaii_map <- st_as_sf(
+  map("world", region = "USA:Hawaii", plot = FALSE, fill = TRUE)
+)
+
+# ── Heatmap data (station-level linking) ─────────────────────────────────────
+df_heat <- df_long %>%
+  filter(Station.Name %in% df_stations$Station.Name) %>%
+  mutate(
+    Station.Name = as.character(Station.Name),
+    date = as.Date(date),
+
+    rainfall_in = round(rainfall * 0.0394, 2),
+
+    tooltip = paste0(
+      "Station: ", Station.Name,
+      "\nDate: ", format(date, "%b %d"),
+      "\nRainfall: ", rainfall_in, " in"
+    ),
+
+    # IMPORTANT: station-level ID for linking
+    data_id = Station.Name
+  )
+
+# ── Map data (must match heatmap IDs exactly) ────────────────────────────────
+df_map_points <- df %>%
+  filter(Station.Name %in% df_stations$Station.Name) %>%
+  mutate(
+    Station.Name = as.character(Station.Name),
+
+    total_in = round(
+      rowSums(select(., starts_with("X2026")), na.rm = TRUE) * 0.0394, 2
+    ),
+
+    tooltip = paste0(
+      "Station: ", Station.Name,
+      "\nIsland: ", Island,
+      "\nTotal Rainfall: ", total_in, " in"
+    ),
+
+    data_id = Station.Name
+  )
+
+# ── Heatmap ───────────────────────────────────────────────────────────────────
+p_heat <- ggplot(
+  df_heat,
+  aes(
+    x = date,
+    y = reorder(Station.Name, rainfall, sum),
+    fill = rainfall_in,
+    tooltip = tooltip,
+    data_id = data_id
+  )
+) +
+  geom_tile_interactive(colour = "grey20") +
+  scale_fill_viridis_c(option = "D", na.value = "grey30") +
+  scale_x_date(date_labels = "%b %d", date_breaks = "2 days") +
+  labs(
+    title = "Daily Rainfall — Top 10 Stations",
+    x = NULL,
+    y = NULL
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.background = element_rect(fill = "#1a1a2e", colour = NA),
+    panel.background = element_rect(fill = "#1a1a2e", colour = NA),
+    text = element_text(colour = "white"),
+    axis.text = element_text(colour = "white"),
+    panel.grid = element_line(colour = "grey10"),
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold", colour = "white")
+  )
+
+# ── Map ───────────────────────────────────────────────────────────────────────
+p_map <- ggplot() +
+  geom_sf(
+    data = hawaii_map,
+    fill = "#2d4a6e",
+    colour = "white",
+    linewidth = 0.3
+  ) +
+  geom_point_interactive(
+    data = df_map_points,
+    aes(
+      x = LON,
+      y = LAT,
+      colour = total_in,
+      tooltip = tooltip,
+      data_id = data_id
+    ),
+    size = 4
+  ) +
+  scale_colour_viridis_c(option = "D") +
+  labs(title = "Stations") +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.background = element_rect(fill = "#1a1a2e", colour = NA),
+    panel.background = element_rect(fill = "#1a1a2e", colour = NA),
+    text = element_text(colour = "white"),
+    axis.text = element_text(colour = "white", size = 12),
+    panel.grid = element_line(colour = "grey20"),
+    legend.position = "bottom"
+  )
+
+# ── Combine plots ─────────────────────────────────────────────────────────────
+combined_plot <- p_heat + p_map + plot_layout(widths = c(1.6, 1))
+
+# ── Render in RStudio Viewer ──────────────────────────────────────────────────
+girafe(
+  ggobj = combined_plot,
+  width_svg = 11.5,
+  height_svg = 6,
+  options = list(
+    opts_hover(css = "fill:orange; stroke:white; stroke-width:1.2;"),
+    opts_hover_inv(css = "opacity:0.3;"),
+    opts_selection(
+      type = "single",
+      css = "fill:orange; stroke:white; stroke-width:1.5;"
+    ),
+    opts_toolbar(saveaspng = TRUE),
+    opts_sizing(rescale = TRUE)
+  )
+)
+```
